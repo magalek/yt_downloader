@@ -6,13 +6,20 @@ import os
 from pathlib import Path
 #from firebase_integration import Firebase
 from moviepy.editor import *
+import subprocess
+import requests
+from version_parser import Version
+import signal
 
 #firebase = Firebase()
+
+version = '1.0.1'
+new_version_available = False
 
 if os.path.exists(str(Path.home()) + "/downloader_data.dat"):
     with open(str(Path.home()) + "/downloader_data.dat", 'rb') as fp:
         downloader_data = pickle.load(fp)
-        print(downloader_data)
+        #print(downloader_data)
 else:
     downloader_data = {"download_path":"", "history":[]}
 
@@ -82,16 +89,42 @@ def DownloadTrack(title):
         print(inst)
         dpg.set_value("Label", "Download failed.")
     
+def check_for_updates():
+    url = 'https://api.github.com/repos/magalek/yt_downloader/releases/latest'
+
+    response = requests.get(url)
+
+    json = response.json()
+    release_version = json['name']
+    currentVersion = Version(version)
+    remoteVersion = Version(release_version)
+    new_version_available = remoteVersion > currentVersion
+    print(currentVersion)
+    print(remoteVersion)
+    print("NEW VERSION " + str(new_version_available))
+    return new_version_available
+
+def update_module():
+    subprocess.Popen("downloader.exe", start_new_session=True)
+    dpg.stop_dearpygui()
+    dpg.destroy_context()
+    sys.exit()
+
 def main():
 
 
     #firebase.initialize(os.getlogin())
 
+    update_available = check_for_updates()
+
     dpg.create_context()
 
-    dpg.create_viewport(width=1000, height=600, title="YT Downloader")
+    dpg.create_viewport(width=1000, height=600, title="YT Downloader " + version)
 
     dpg.setup_dearpygui()
+
+    def update():
+        update_module()
 
     def print_input_text():
         name = dpg.get_value("__input_text")
@@ -113,16 +146,25 @@ def main():
         directory_selector=True, show=False, callback=file_dialog_ok_callback, tag="file_dialog_id",
         cancel_callback=file_dialog_cancel_callback, width=700 ,height=400)
 
+    width, height, channels, data = dpg.load_image("C:\Projects\Python\http-server\html\img\cat-spinning.gif")
+
+    with dpg.texture_registry(show=True):
+        dpg.add_static_texture(width=width, height=height, default_value=data, tag="texture_tag")
+
     with dpg.window(autosize=True, pos=[0, 0]) as win1:    
         dpg.add_button(label="Select download path", callback=lambda: dpg.show_item("file_dialog_id"))
         dpg.add_input_text(tag="__path_input", height= 60, label="Download path", default_value=downloader_data["download_path"])
         dpg.add_input_text(tag="__input_text", height= 60, label="Video name")
         dpg.add_button(label="Download",callback=print_input_text, height=30)
         dpg.add_text(tag="Label")
+        if update_available:
+            dpg.add_button(label="Update",callback=update, height=30)
+        dpg.add_image("texture_tag")
+            
         
     with dpg.window(autosize=True, pos=[500, 0], ) as win2:    
         dpg.add_text(tag="history", default_value=build_history())
-            
+
 
     dpg.show_viewport()
     dpg.start_dearpygui()
